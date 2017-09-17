@@ -1,2 +1,64 @@
 ---
-# tasks file for conda
+- block:
+  - name: get conda checksum
+    set_fact:
+      checksum_list: "{{ lookup('url', conda_url) | replace('</tr>', '/n') | striptags }}"
+  - set_fact:
+      pattern: "(?:{{ conda_installer }}), (?:[0-9.]+M), (?:[0-9-: ]+), \\b(\\w+)\\b, /n" #Miniconda2-latest-Linux-x86_64.sh, 27.8M, 2017-06-02 11:12:06, 7097150146dd3b83c805223663ebffcc, /n
+  - set_fact:
+      conda_checksum: "{{ checksum_list | regex_search(pattern, '\\1') | first }}"
+  when: conda_checksum == ""
+
+- debug:
+    msg: "{{ conda_installer }} checksum: {{ conda_checksum }}"
+    verbosity: 1
+
+- name: stat conda d/l
+  stat:
+    path:  "{{ conda_download_dir }}/{{ conda_installer }}"
+    get_md5: true
+  register: existing_dl
+
+- set_fact:
+    force_new_download: "{{ existing_dl.stat.checksum != conda_checksum }}"
+  when: existing_dl.stat.exists
+
+- name: get conda installer
+  get_url:
+    url:      "{{ conda_installer_url }}"
+    dest:     "{{ conda_download_dir }}"
+    checksum: "{{ conda_checksum_algorithm }}:{{ conda_checksum }}"
+    mode: u+x
+  register: got_conda
+  when: force_new_download | default ('true')
+  notify: remove conda
+
+- meta: flush_handlers
+
+- name: install conda
+  shell: "./{{ conda_installer }} -b"
+  args:
+    executable: /bin/bash
+    chdir: "{{ conda_download_dir }}"
+  when: got_conda.changed
+
+- name: add conda to path
+  lineinfile:
+    dest:   "/etc/profile.d/conda.sh"
+    line:   "export PATH=$PATH:{{ conda_path }}/"
+    state:  present
+    create: yes
+  become: true
+
+- name: get conda version
+  shell: bash -lc "conda --version 2>&1"
+  register: conda_version_result
+  changed_when: false
+  failed_when: false
+
+- set_fact: returned_conda_version={{ conda_version_result.stdout | regex_search('(?P<test>\d+\.\d+\.\d+)', '\\g<test>' ) | first }}
+
+- name: test conda version
+  fail:
+    msg: "attempted to install conda version {{ conda_version }}, but something went wrong"
+  when: "not returned_conda_version | version_compare('{{ conda_version }}', '>=')"

@@ -1,2 +1,9 @@
 ---
-# defaults file for conda
+conda_version:            "0.0" # when any version will do
+conda_url:                "https://repo.continuum.io/miniconda"
+conda_installer:          "Miniconda2-latest-Linux-x86_64.sh"
+conda_installer_url:      "{{ conda_url }}/{{ conda_installer }}"
+conda_checksum_algorithm: "md5"
+conda_checksum:           ""
+conda_download_dir:       "{{ ansible_env.HOME}}"
+conda_path:               "{{ conda_download_dir }}/miniconda2/bin"

@@ -1,2 +1,10 @@
 ---
-# handlers file for conda
+- name: remove conda
+  command: "rm -rf {{ item }}"
+  args:
+    chdir: "{{ conda_download_dir }}"
+  with_items:
+    - "miniconda2"
+    - ".condarc"
+    - ".conda"
+    - ".continuum"
